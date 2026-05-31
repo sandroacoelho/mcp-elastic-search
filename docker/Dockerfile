@@ -27,7 +27,7 @@
 # ---- runtime stage -----------------------------------------------------------
 # Base image pinned by digest (ADR-0002 §2). Tag at pin time: alpine:3.21.
 # Re-pin deliberately when upgrading — never float to a mutable tag.
-FROM alpine@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+FROM alpine@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 
 LABEL org.opencontainers.image.title="secure-mcp-service" \
       org.opencontainers.image.description="Hardened, language-agnostic MCP service container (reference)" \
