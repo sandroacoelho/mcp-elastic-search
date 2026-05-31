@@ -1,0 +1,17 @@
+{
+  "mcp": {
+    "config": {
+      "_comment": "EXAMPLE policy data — replace role_grants and valid_purposes with your real RBAC/purpose catalog (ADR-0001 §5/§14). Objects-as-sets: key present means granted/valid.",
+      "role_grants": {
+        "analyst": { "orders": true, "customer_record": true },
+        "support": { "customer_record": true },
+        "auditor": { "audit_log": true }
+      },
+      "valid_purposes": {
+        "fraud_review": true,
+        "support_case": true,
+        "reporting": true
+      }
+    }
+  }
+}

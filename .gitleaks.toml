@@ -1,0 +1,17 @@
+# gitleaks configuration — secure-mcp-service blueprint
+# Used by the CI secret-scan job and the local pre-commit hook (ADR-0002 §4).
+title = "secure-mcp-service blueprint"
+
+# Start from gitleaks' built-in ruleset, then add repo-specific allowlisting.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented template placeholders and example files are not real secrets."
+paths = [
+  '''\.env\.example$''',
+  '''.*\.tfvars\.example$''',
+  # The Dockerfile pins base images by SHA256 digest (ADR-0002 §2); those are
+  # content digests, not secrets.
+  '''docker/Dockerfile$''',
+]

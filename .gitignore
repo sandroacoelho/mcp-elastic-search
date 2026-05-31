@@ -1,0 +1,208 @@
+# =============================================================================
+# .gitignore — SECURITY-FIRST
+#
+# This repo designs a service for a highly regulated environment (GDPR · LGPD ·
+# HIPAA · PCI-DSS · SOC2 · FedRAMP). Per ADR-0001 (§6 Data Protection, §10 Audit,
+# §11 Secrets & Key Mgmt, §17 Privacy) and ADR-0002 (Supply Chain), the following
+# must NEVER enter version control: secrets, cryptographic keys, access tokens,
+# tokenization mappings, raw regulated data (PHI/PCI/PII), and audit logs.
+#
+# Posture: deny broadly. A blocked-but-legitimate file (e.g. a PUBLIC cert) can be
+# force-added intentionally with:  git add -f <path>
+# Defense in depth: this is a backstop, NOT the only control — also run a secret
+# scanner (gitleaks / git-secrets) in pre-commit and CI (ADR-0002 §4).
+#
+# NOTE: git does NOT support trailing/inline comments — every comment is on its
+# own line so no pattern is accidentally broken.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Secrets, credentials & environment files
+# -----------------------------------------------------------------------------
+.env
+.env.*
+*.env
+*secret*
+*secrets*
+*credential*
+*credentials*
+*password*
+*.secret
+secrets/
+.secrets/
+# Terraform vars routinely hold secrets:
+*.tfvars
+*.tfvars.json
+# Allow documented, non-secret templates (force-added if matched above):
+!.env.example
+!*.env.example
+!*.tfvars.example
+
+# -----------------------------------------------------------------------------
+# 2. Cryptographic keys & keystores (ADR-0001 §11 — keys never leave the boundary)
+# -----------------------------------------------------------------------------
+*.key
+*.pem
+*.p12
+*.pfx
+# Java keystore / truststore:
+*.jks
+*.keystore
+*.truststore
+*.asc
+*.gpg
+*.pgp
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*_rsa
+*_dsa
+*.ppk
+.ssh/
+
+# -----------------------------------------------------------------------------
+# 2b. Certificates — public certs are not secret, but block by default and
+#     force-add intentionally (git add -f) to avoid committing a private key by mistake.
+# -----------------------------------------------------------------------------
+*.crt
+*.cer
+*.der
+
+# -----------------------------------------------------------------------------
+# 3. Tokens, sessions & identity material (ADR-0001 §5 — OIDC/DPoP/mTLS, RFC 8693)
+# -----------------------------------------------------------------------------
+*.jwt
+*.token
+*token*
+# Private JWKS / signing keys — publish only public sets, force-add if needed:
+jwks*.json
+dpop*.key
+*.session
+
+# -----------------------------------------------------------------------------
+# 4. Cloud / KMS / Vault / IaC state & secret material (ADR-0001 §11, §12)
+# -----------------------------------------------------------------------------
+.aws/
+.azure/
+.gcloud/
+gcloud-*.json
+*service-account*.json
+*sa-key*.json
+kubeconfig
+*.kubeconfig
+.kube/
+vault-token
+.vault-token
+*.hcl.secret
+# Terraform / OpenTofu state can contain plaintext secrets:
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+# Helm-secrets / sops decrypted output:
+*secrets*.yaml
+*.dec.yaml
+*.dec.json
+
+# -----------------------------------------------------------------------------
+# 5. Tokenization mappings & DLP findings (ADR-0001 §6, §17 — never commit)
+# -----------------------------------------------------------------------------
+*token-map*
+*tokenization*
+token_mappings/
+dlp-findings/
+*.dlp
+
+# -----------------------------------------------------------------------------
+# 6. Regulated data — PHI / PCI / PII (ADR-0001 §24; unknown data = Restricted).
+#    Raw payloads, DB dumps, exports, DSAR bundles must never be committed.
+# -----------------------------------------------------------------------------
+*.dump
+*.bak
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+dump/
+dumps/
+backups/
+exports/
+*export*.csv
+*export*.json
+phi/
+pci/
+pii/
+restricted/
+dsar/
+# Packet captures may contain regulated data in transit:
+*.pcap
+
+# -----------------------------------------------------------------------------
+# 7. Audit & log output (ADR-0001 §10 — WORM is the system of record, not git)
+# -----------------------------------------------------------------------------
+*.log
+logs/
+audit/
+*.audit
+otel-*.json
+*.trace
+
+# -----------------------------------------------------------------------------
+# 8. Build artifacts & dependencies (polyglot: Go · Java · Rust · Node — ADR-0001 §1)
+# -----------------------------------------------------------------------------
+# Go
+bin/
+*.exe
+*.test
+*.out
+# Java (Maven / Gradle)
+target/
+build/
+.gradle/
+*.class
+*.jar
+*.war
+# Rust (Cargo)
+**/*.rs.bk
+# Node
+node_modules/
+dist/
+.npm/
+*.tgz
+
+# -----------------------------------------------------------------------------
+# 9. Containers & supply-chain scan output (ADR-0002 — SBOM/scan are artifacts)
+# -----------------------------------------------------------------------------
+*.sbom
+*.sbom.json
+sbom-*.json
+# CycloneDX / SPDX SBOMs:
+*.cdx.json
+*.spdx.json
+trivy-results.*
+grype-*.json
+.cosign/
+# Detached signatures — produced by the pipeline, not committed:
+*.sig
+
+# -----------------------------------------------------------------------------
+# 10. Local tooling, OS & editor cruft
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.tmp
+*.temp
+tmp/
+.cache/
+
+# -----------------------------------------------------------------------------
+# 11. Claude Code — keep shared config, ignore per-user local overrides
+# -----------------------------------------------------------------------------
+.claude/settings.local.json

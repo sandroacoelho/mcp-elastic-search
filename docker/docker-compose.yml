@@ -1,0 +1,40 @@
+# Runs the hardened reference container with the runtime controls that cannot
+# live in the Dockerfile (read-only root FS, dropped capabilities,
+# no-new-privileges, loopback-only ingress). Mirrors ADR-0001 §9.
+#
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# Production note: these flags are the local-dev equivalent of the real controls.
+# In a cluster, enforce them with a restricted PodSecurity standard /
+# SecurityContext, NetworkPolicy (gateway-only ingress + egress allowlist), and a
+# service mesh. Compose cannot model the gateway chokepoint or egress allowlist.
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: secure-mcp-service:dev
+
+    # ---- Runtime isolation (ADR-0001 §9) ----
+    read_only: true                     # read-only root filesystem
+    cap_drop: [ALL]                     # drop all Linux capabilities
+    security_opt:
+      - no-new-privileges:true          # cannot acquire new privileges via setuid, etc.
+    # seccomp: Docker's default profile applies. Add AppArmor/SELinux at the host.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m  # writable scratch without a writable rootfs
+    user: "10001:10001"                 # matches the non-root user baked into the image
+    pids_limit: 256
+    mem_limit: 256m
+
+    # Loopback-only: in production the gateway is the ONLY ingress, never the host.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    networks: [mcp]
+    restart: unless-stopped
+
+networks:
+  mcp:
+    driver: bridge

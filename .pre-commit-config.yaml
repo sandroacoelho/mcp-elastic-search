@@ -1,0 +1,24 @@
+# Local defense-in-depth (ADR-0002 §4): run secret scanning and basic hygiene
+# BEFORE code reaches git. The .gitignore is the backstop; this is the gate.
+#
+#   pip install pre-commit   # or: brew install pre-commit
+#   pre-commit install       # enable the git hook
+#   pre-commit run --all-files
+#
+# Hook revisions are pinned to immutable release tags. Bump them deliberately.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        # Uses .gitleaks.toml at the repo root.
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key      # blocks committing private keys (ADR-0001 §11)
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
