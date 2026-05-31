@@ -11,7 +11,8 @@ invocation and enforces the returned `decision`.
 |---|---|
 | `authz.rego` | The policy: deny-by-default, read tier, high-risk tiers (step-up + human approval), context-bound approval, obligations. |
 | `authz_test.rego` | Tests for allow / deny / pending-approval / obligation / fail-closed (ADR-0001 §15, §23/§758 QA matrix). |
-| `data.json` | **Example** RBAC + purpose catalog. Replace with your real data — the policy is generic; the data is per-deployment. |
+| `authz_elastic_test.rego` | Read-tier authorization tests for the Elasticsearch server's five tools (ADR-0003): allowlist scoping, result cap + sensitive-field projection obligations, restricted-data approval gating. |
+| `data.json` | **Example** RBAC + purpose catalog (incl. example ES index grants and `read_row_cap`). Replace with your real data — the policy is generic; the data is per-deployment. |
 
 ## Decision contract
 

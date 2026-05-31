@@ -125,3 +125,18 @@ obligations contains {"action": "redact", "scope": "restricted"} if {
 	effective_level == "restricted"
 	not input.data_classification == "PCI"
 }
+
+# Read-tier results are bounded at the gateway, complementing the server-side page
+# caps in the Elasticsearch read-only server (ADR-0003 §2 result-bounding; threat E3).
+# The cap is data-driven (config.read_row_cap) so deployments tune it without code change.
+obligations contains {"action": "cap_rows", "limit": data.mcp.config.read_row_cap} if {
+	input.tool.tier == "read"
+}
+
+# Sensitive reads (Confidential or Restricted) are field-minimized: the gateway projects
+# only the necessary _source fields (ADR-0003 threat E4; §6 minimum-necessary). Low-class
+# reads are unaffected.
+obligations contains {"action": "project_source", "scope": "minimal"} if {
+	input.tool.tier == "read"
+	effective_level != "low"
+}

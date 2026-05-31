@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: mcp-elastic-search
+  ai:
+    mcp:
+      server:
+        name: mcp-elastic-search
+        version: 0.1.0
+        # Streamable HTTP / SSE — reachable ONLY from the platform gateway
+        # (ADR-0001 §4 network-policy invariant).
+
+server:
+  port: 8081
+
+# Read-only Elasticsearch MCP server configuration (ADR-0003).
+mcpes:
+  connection:
+    host: ${ES_HOST:https://localhost:9200}
+    # Least-privilege API key (read + view_index_metadata on allowlisted indices only).
+    api-key: ${ES_API_KEY:}
+  # Logical name -> concrete index/alias. Only these are readable; everything else fails closed.
+  allowlist:
+    sample: sample-v1
+  limits:
+    default-page-size: 10
+    max-page-size: 100
+    max-result-window: 10000
+    request-timeout-seconds: 10
+
+logging:
+  level:
+    ai.enterprise.mcp.elastic: INFO

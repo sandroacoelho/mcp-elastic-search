@@ -1,0 +1,57 @@
+# Dependabot configuration
+#
+# Keeps the repo's dependencies patched in support of ADR-0002 (Software Supply
+# Chain Security). Dependabot preserves the repo's pinning discipline:
+#   • GitHub Actions stay SHA-pinned (Dependabot bumps the SHA + the `# vX` comment).
+#   • Docker base images stay digest-pinned (Dependabot bumps the @sha256 digest).
+# Grouped minor/patch PRs keep review load low; majors are raised individually.
+version: 2
+updates:
+  # --- Java / Maven server ---------------------------------------------------
+  - package-ecosystem: maven
+    directory: /server
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - java
+    commit-message:
+      prefix: "deps(maven)"
+    groups:
+      maven-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # --- GitHub Actions (SHA-pinned) -------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # --- Docker reference container (digest-pinned) ----------------------------
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: "deps(docker)"

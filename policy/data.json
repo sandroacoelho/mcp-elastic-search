@@ -1,17 +1,20 @@
 {
   "mcp": {
     "config": {
-      "_comment": "EXAMPLE policy data — replace role_grants and valid_purposes with your real RBAC/purpose catalog (ADR-0001 §5/§14). Objects-as-sets: key present means granted/valid.",
+      "_comment": "EXAMPLE policy data — replace role_grants and valid_purposes with your real RBAC/purpose catalog (ADR-0001 §5/§14). Objects-as-sets: key present means granted/valid. ES resources are the logical index names from the ADR-0003 allowlist; read_row_cap bounds read-tier results.",
       "role_grants": {
         "analyst": { "orders": true, "customer_record": true },
         "support": { "customer_record": true },
-        "auditor": { "audit_log": true }
+        "auditor": { "audit_log": true },
+        "es_reader": { "products": true, "customers": true }
       },
       "valid_purposes": {
         "fraud_review": true,
         "support_case": true,
-        "reporting": true
-      }
+        "reporting": true,
+        "catalog_search": true
+      },
+      "read_row_cap": 100
     }
   }
 }
