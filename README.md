@@ -56,7 +56,7 @@ mcpes:
   limits: { default-page-size: 10, max-page-size: 100, max-result-window: 10000, request-timeout-seconds: 10 }
 ```
 
-Transport is Streamable HTTP/SSE (`GET /sse`), default port `8081` — reachable **only**
+Transport is Streamable HTTP/SSE (`GET /elastic`), default port `9090` — reachable **only**
 from the gateway by network policy (ADR-0001 §4).
 
 ## What's in here

@@ -1,0 +1,34 @@
+# Keep the build context minimal and avoid leaking secrets/cruft into the image
+# (supports ADR-0002 supply-chain hygiene). The build context is the REPO ROOT
+# (see docker/Dockerfile). Only ./server is actually needed by the build stage.
+.git
+.gitignore
+.github
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.crt
+**/id_rsa*
+**/secrets*
+
+# IDE / editor cruft
+**/.idea
+**/.vscode
+**/*.iml
+
+# Build/output artifacts that must never enter an image (Maven builds inside the
+# image from source; host-built target/ would only bloat the context):
+**/target
+node_modules
+dist
+build
+*.log
+
+# Everything not required by the build stage:
+docs
+docker
+policy
+tests
+skills
+*.md

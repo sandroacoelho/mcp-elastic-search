@@ -67,7 +67,7 @@ ArchUnit-enforced internal architecture and a ≥90% coverage release gate.
 |---|---|
 | **Language / runtime** | **Java 25** (LTS), toolchain-pinned; preview features **off**. |
 | **Framework** | **Spring Boot** (3.5.x line) with the **Spring AI MCP server** starter (`spring-ai-starter-mcp-server-webmvc`). Build with Maven, pinned to a known-good GA (`maven-mirror-newer-versions`). |
-| **Transport** | Remote **HTTP / SSE** (`GET /sse`, messages `POST /mcp/message?sessionId=…`), per ADR-0001 transport decision. Reachable **only** from the gateway (ADR-0001 §4 invariant). |
+| **Transport** | Remote **HTTP / SSE** (`GET /elastic`, messages `POST /elastic/message?sessionId=…`, default port `9090`), per ADR-0001 transport decision. Reachable **only** from the gateway (ADR-0001 §4 invariant). |
 | **Capability tier** | **`read` only.** No `write` / `bulk` / `external` / `file-write` tools exist in this server (ADR-0001 §7). |
 | **Tools exposed** | `listIndices`, `describeIndex` (mappings + settings), `search` (query DSL, bounded), `getDocument` (by id), `count`. Closed set; adding one is a threat-model + review event (ADR-0001 §23/§25). |
 | **Query guard** | A read-only **`QueryGuard`** (analogous to the DB server's `SqlGuard`): allow only search/read request shapes; **reject** `script`/`script_score`/`runtime_mappings` scripting, `_msearch`, `_sql`, `_painless_execute`, update-by-query, delete-by-query, and any mutating endpoint. |
@@ -146,7 +146,7 @@ Every threat names its primary control(s).
 | E5 | **Confused deputy via ES credential** | Server's broad ES API key reads data the user may not see | Least-privilege role (`read`+`view_index_metadata` on allowlisted indices only); gateway-scoped, audience-bound token required; no god-credential (maps T2/T3) |
 | E6 | **Regulated payload in logs/audit** | Document bodies (PHI/PAN/PII) written to logs or traces | Structured audit = hashes/ids/metadata only; SLF4J-only + redaction (ArchUnit A5); contract test C5 (maps T10/§6) |
 | E7 | **Unlabeled-data leakage** | Index/doc lacks a classification label and is served anyway | Fail closed: unknown classification → Restricted → denied unless explicitly granted (ADR-0001 §24; contract C6) |
-| E8 | **Direct (gateway-bypassing) access** | Caller reaches the server's `/sse` directly, skipping gateway controls | Network policy: ingress only from gateway (ADR-0001 §4); optional local auth gate is defense-in-depth, not the control |
+| E8 | **Direct (gateway-bypassing) access** | Caller reaches the server's `/elastic` directly, skipping gateway controls | Network policy: ingress only from gateway (ADR-0001 §4); optional local auth gate is defense-in-depth, not the control |
 | E9 | **Token passthrough / wrong audience** | Raw client token or wrong-audience token accepted | Accept only gateway-minted, audience-bound tokens; reject raw/expired/missing (contract C1; maps T3) |
 
 ## 6. Compliance Control Mapping

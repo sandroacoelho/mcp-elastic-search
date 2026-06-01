@@ -7,10 +7,27 @@ spring:
         name: mcp-elastic-search
         version: 0.1.0
         # Streamable HTTP / SSE — reachable ONLY from the platform gateway
-        # (ADR-0001 §4 network-policy invariant).
+        # (ADR-0001 §4 network-policy invariant). SSE stream is served at /elastic
+        # (default would be /sse); clients POST messages to /elastic/message
+        # (default would be /mcp/message).
+        sse-endpoint: /elastic
+        sse-message-endpoint: /elastic/message
 
 server:
-  port: 8081
+  port: 9090
+
+# Actuator: expose ONLY health over HTTP (ADR-0001 §9 — minimal surface). The
+# container HEALTHCHECK and k8s liveness/readiness probes hit /actuator/health.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true   # adds /actuator/health/{liveness,readiness}
+      show-details: never
 
 # Read-only Elasticsearch MCP server configuration (ADR-0003).
 mcpes:

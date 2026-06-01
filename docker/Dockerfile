@@ -1,37 +1,44 @@
 # syntax=docker/dockerfile:1
 ###############################################################################
-# Secure MCP Service — reference container (LANGUAGE-AGNOSTIC, HARDENED)
+# mcp-elastic-search — distribution image (HARDENED, multi-stage)
 #
-# Embodies the runtime-isolation + supply-chain controls from the ADRs:
-#   • ADR-0001 §9 (Runtime Isolation & Egress): non-root, read-only root FS,
-#     minimal base image, no host network (the last enforced via compose/orchestrator).
-#   • ADR-0002 (Software Supply Chain Security): base image pinned by SHA256 digest.
+# Builds the Spring Boot (Java 25 + Spring AI) MCP server from ./server and ships
+# it on a minimal JRE. Embodies the same controls as the reference container:
+#   • ADR-0001 §9 (Runtime Isolation): non-root, read-only-rootfs friendly,
+#     minimal base image, health endpoint for liveness/readiness probes.
+#   • ADR-0002 §2 (Supply Chain): every base image pinned by SHA256 digest,
+#     never a mutable tag. Re-pin deliberately on upgrade (see README).
 #
-# It BUILDS and RUNS as-is. The placeholder "service" is BusyBox httpd (already in
-# the base image — no language runtime added) serving a health document, so the
-# hardening is demonstrably real. Replace the placeholder at the ">>> REPLACE"
-# markers with your Go / Java / Rust MCP server binary.
+# BUILD CONTEXT IS THE REPO ROOT (the build stage needs ./server):
+#   docker build -f docker/Dockerfile -t mcp-elastic-search:0.1.0 .
+# or via compose (context: .., dockerfile: docker/Dockerfile):
+#   docker compose -f docker/docker-compose.yml up --build
 ###############################################################################
 
-# ---- (optional) build stage --------------------------------------------------
-# >>> REPLACE: compile your MCP server here, then COPY the artifact into runtime.
-#     Pin THIS base by digest too (ADR-0002 §2). Example (Go):
-#
-#       FROM golang@sha256:<digest> AS build
-#       WORKDIR /src
-#       COPY . .
-#       RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/mcp-server ./cmd/server
-#
-#     Then in the runtime stage below:  COPY --from=build /out/mcp-server /app/mcp-server
+# ---- build stage -------------------------------------------------------------
+# Maven + Temurin JDK 25, pinned by digest. Tag at pin time: maven:3.9-eclipse-temurin-25-alpine.
+FROM maven@sha256:5e8229c2aed320c85d2b3851585dd2e7f7c481e366ce051238e802fd4cfb74aa AS build
+WORKDIR /src
+
+# Resolve dependencies first so this layer caches unless the POM changes.
+COPY server/pom.xml ./pom.xml
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline
+
+# Compile + package the executable jar. Tests (incl. Testcontainers IT) run in CI,
+# not in the image build — keep the build hermetic and Docker-in-Docker-free.
+COPY server/src ./src
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q -DskipTests clean package \
+ && cp target/*.jar /src/app.jar
 
 # ---- runtime stage -----------------------------------------------------------
-# Base image pinned by digest (ADR-0002 §2). Tag at pin time: alpine:3.21.
-# Re-pin deliberately when upgrading — never float to a mutable tag.
-FROM alpine@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+# Temurin JRE 25 on Alpine, pinned by digest. Tag at pin time: eclipse-temurin:25-jre-alpine.
+# Alpine's BusyBox provides `wget` for the HEALTHCHECK without adding packages.
+FROM eclipse-temurin@sha256:c707c0d18cb9e8556380719f80d96a7529d0746fbb42143893949b98ed2f8943
 
-LABEL org.opencontainers.image.title="secure-mcp-service" \
-      org.opencontainers.image.description="Hardened, language-agnostic MCP service container (reference)" \
-      org.opencontainers.image.source="https://example.com/your-org/your-repo"
+LABEL org.opencontainers.image.title="mcp-elastic-search" \
+      org.opencontainers.image.description="Read-only Elasticsearch MCP server (Java 25 + Spring AI, HTTP/SSE)" \
+      org.opencontainers.image.source="https://github.com/your-org/mcp-elastic-search" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
 # Non-root user (ADR-0001 §9). Fixed UID/GID so mounted-volume perms are predictable.
 ARG APP_UID=10001
@@ -39,31 +46,24 @@ ARG APP_GID=10001
 RUN addgroup -g ${APP_GID} -S app \
  && adduser  -u ${APP_UID} -G app -S -H -s /sbin/nologin app
 
-# Port the MCP server listens on (Streamable HTTP / SSE). >1024 so no root needed.
-ARG MCP_PORT=8080
-ENV MCP_PORT=${MCP_PORT}
+# Port the MCP server listens on (Spring `server.port`, relaxed-bound from SERVER_PORT).
+ARG APP_PORT=9090
+ENV SERVER_PORT=${APP_PORT}
+# Size the heap to the container's cgroup limit instead of the host's RAM.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
 
-# ---- placeholder application -------------------------------------------------
-# >>> REPLACE this whole block with your MCP server binary + ENTRYPOINT.
-#     The placeholder serves a static health document via BusyBox httpd so the
-#     container is verifiably runnable and hardened out of the box. httpd lives
-#     in busybox-extras (the default Alpine BusyBox compiles it out); the package
-#     version is pinned per ADR-0002 §2 ("pin tool versions").
-RUN apk add --no-cache busybox-extras=1.37.0-r14
 WORKDIR /app
-RUN mkdir -p /app/www \
- && printf '{"status":"ok","service":"secure-mcp-service","note":"placeholder — replace with your MCP server"}\n' \
-      > /app/www/healthz \
- && chown -R app:app /app
-# ------------------------------------------------------------------------------
+COPY --from=build --chown=app:app /src/app.jar /app/app.jar
 
 USER app:app
-EXPOSE ${MCP_PORT}
+EXPOSE ${APP_PORT}
 
-# Liveness probe (an orchestrator may override). Shell form so ${MCP_PORT} expands at runtime.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O /dev/null "http://127.0.0.1:${MCP_PORT}/healthz" || exit 1
+# Liveness probe — app-state only, NOT gated on Elasticsearch (Actuator's ES health
+# indicator would otherwise flap the container whenever ES is briefly unreachable).
+# Orchestrators should additionally gate traffic on /actuator/health/readiness.
+# Shell form so ${SERVER_PORT} expands at runtime.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget -q -O /dev/null "http://127.0.0.1:${SERVER_PORT}/actuator/health/liveness" || exit 1
 
-# >>> REPLACE: exec your server. Placeholder = BusyBox httpd in the foreground (-f),
-#     serving the read-only /app/www document root.
-ENTRYPOINT ["sh", "-c", "exec /usr/sbin/httpd -f -p \"${MCP_PORT}\" -h /app/www"]
+# Exec form via sh so the JVM is PID-but-signal-forwarded; `exec` replaces the shell.
+ENTRYPOINT ["sh", "-c", "exec java -jar /app/app.jar"]

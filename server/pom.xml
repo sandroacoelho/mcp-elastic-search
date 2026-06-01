@@ -65,6 +65,14 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Liveness/readiness for container orchestration. Only the health endpoint
+             is exposed over HTTP (see application.yml `management.*`); everything else
+             stays off to keep the surface minimal (ADR-0001 §9). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- ===== Test ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

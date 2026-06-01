@@ -12,9 +12,25 @@
 services:
   mcp-server:
     build:
-      context: .
-      dockerfile: Dockerfile
-    image: secure-mcp-service:dev
+      context: ..                       # repo root — the build stage compiles ./server
+      dockerfile: docker/Dockerfile
+    image: mcp-elastic-search:dev
+
+    # ---- Read-only Elasticsearch connection (ADR-0003) ----
+    # Supply a least-privilege API key; never bake secrets into the image.
+    environment:
+      ES_HOST: ${ES_HOST:-https://localhost:9200}
+      ES_API_KEY: ${ES_API_KEY:-}
+
+      # ---- Extra runtime env (raw passthrough) — RENAME to your real vars ----
+      # Values come from your shell or a sibling .env file at `docker compose up`;
+      # they are injected at runtime and never baked into the image.
+      #
+      # Non-secret config: `${VAR:-default}` falls back when the var is unset.
+      EXTRA_VAR_1: ${EXTRA_VAR_1:-default-value}
+      # Secret (token/key): `${VAR:?msg}` fails the run fast if it isn't set,
+      # so a missing secret never starts the container silently.
+      EXTRA_VAR_2: ${EXTRA_VAR_2:?set EXTRA_VAR_2 in your shell or .env}
 
     # ---- Runtime isolation (ADR-0001 §9) ----
     read_only: true                     # read-only root filesystem
@@ -23,14 +39,14 @@ services:
       - no-new-privileges:true          # cannot acquire new privileges via setuid, etc.
     # seccomp: Docker's default profile applies. Add AppArmor/SELinux at the host.
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m  # writable scratch without a writable rootfs
+      - /tmp:rw,noexec,nosuid,size=64m  # JVM scratch (e.g. temp files) without a writable rootfs
     user: "10001:10001"                 # matches the non-root user baked into the image
     pids_limit: 256
-    mem_limit: 256m
+    mem_limit: 512m                      # JVM heap is capped to 75% of this (MaxRAMPercentage)
 
     # Loopback-only: in production the gateway is the ONLY ingress, never the host.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9090:9090"
 
     networks: [mcp]
     restart: unless-stopped

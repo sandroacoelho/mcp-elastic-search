@@ -65,7 +65,7 @@ the file. See [`skills/README.md`](./skills/README.md) for how each tool wires i
 
 "Done" for a **`docker/`** change means it still builds and runs hardened:
 ```bash
-docker compose -f docker/docker-compose.yml up --build   # then: curl 127.0.0.1:8080/healthz
+docker compose -f docker/docker-compose.yml up --build   # then: curl 127.0.0.1:9090/actuator/health/liveness
 ```
 Verify it stays non-root + read-only-rootfs and the base image is digest-pinned.
 
