@@ -1,10 +1,22 @@
-# CI — Supply Chain Security
+# CI Workflows
 
-[`workflows/supply-chain.yml`](workflows/supply-chain.yml) operationalizes
-[ADR-0002](../docs/adrs/0002-supply-chain-security.md) (status: **accepted**). It
-runs on every PR and on pushes to `main`.
+Two workflows run on every PR and on pushes to `main`.
 
-## What it enforces
+## `ci.yml` — Build & Release Gates
+
+The release-blocking quality gates for the server (ADR-0003) and policy (ADR-0001 §5):
+
+| Job | Gate |
+|---|---|
+| `server-verify` | `mvn verify` in [`server/`](../../server): unit tests + ArchUnit (A1–A7) + JaCoCo **≥90% line/branch** + server-contract suite (QA-10) + Testcontainers ES adapter IT. Uploads the JaCoCo report. |
+| `policy-gate` | `opa check` / `opa fmt --fail` / `opa test` over [`policy/`](../../policy) — deny-by-default + read-tier obligations. |
+
+JDK 25 (Temurin) via SHA-pinned `setup-java` with Maven caching; the integration test
+uses the runner's Docker daemon (the pom pins `api.version=1.40` for modern engines).
+
+## `supply-chain.yml` — Supply Chain Security
+
+Operationalizes [ADR-0002](../../docs/adrs/0002-supply-chain-security.md) (status: **accepted**):
 
 | Job | Control | ADR-0002 |
 |---|---|---|

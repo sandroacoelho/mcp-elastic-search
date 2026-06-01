@@ -21,6 +21,7 @@ public class FakeSearchPort implements SearchPort {
     public int lastFrom = -1;
     public String lastConcreteIndex;
     public Map<String, Object> lastBody;
+    public List<String> lastSourceFields;
 
     @Override
     public List<ConcreteIndex> listIndices() {
@@ -40,6 +41,7 @@ public class FakeSearchPort implements SearchPort {
         this.lastBody = body;
         this.lastSize = size;
         this.lastFrom = from;
+        this.lastSourceFields = sourceFields;
         return new SearchPage(2, false, List.of(new Hit("a", 1.0, Map.of("k", "v"))));
     }
 
