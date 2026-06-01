@@ -27,7 +27,8 @@ class SearchToolsTest {
     @BeforeEach
     void setUp() {
         port = new FakeSearchPort();
-        IndexAllowlist allowlist = new IndexAllowlist(Map.of("customers", "customers-v3"));
+        IndexAllowlist allowlist = new IndexAllowlist(
+                Map.of("customers", "customers-v3"), Map.of("customers", List.of("id", "k")));
         SearchService service = new SearchService(
                 port, new QueryGuard(), allowlist, new SearchLimits(10, 100, 10_000, 10));
         tools = new SearchTools(service);

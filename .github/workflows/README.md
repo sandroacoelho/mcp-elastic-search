@@ -8,7 +8,7 @@ The release-blocking quality gates for the server (ADR-0003) and policy (ADR-000
 
 | Job | Gate |
 |---|---|
-| `server-verify` | `mvn verify` in [`server/`](../../server): unit tests + ArchUnit (A1–A7) + JaCoCo **≥90% line/branch** + server-contract suite (QA-10) + Testcontainers ES adapter IT. Uploads the JaCoCo report. |
+| `server-verify` | `mvn verify` in [`server/`](../../server): unit tests + ArchUnit (A1–A7) + JaCoCo **≥90% line/branch** + server-owned contract checks (QA-10 subset) + Testcontainers ES adapter IT. Uploads the JaCoCo report. |
 | `policy-gate` | `opa check` / `opa fmt --fail` / `opa test` over [`policy/`](../../policy) — deny-by-default + read-tier obligations. |
 
 JDK 25 (Temurin) via SHA-pinned `setup-java` with Maven caching; the integration test

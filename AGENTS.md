@@ -29,7 +29,7 @@ well-cross-linked decision documents, and keep any code faithful to the ADRs.
 | `docker/` | Hardened, digest-pinned, language-agnostic reference container (builds & runs a placeholder; embodies ADR-0001 §9 + ADR-0002). |
 | `policy/` | OPA/Rego authorization policy + tests — the runnable PDP from ADR-0001 §5 (`opa test policy/`). |
 | `tests/server-contract/` | Language-neutral test spec every MCP server must pass (ADR-0001 §4 / QA-10). |
-| `.github/workflows/` | CI enforcing ADR-0002: SHA-pinned actions, gitleaks, Trivy scan, CycloneDX SBOM, image scan, OPA policy tests. See [`.github/README.md`](.github/README.md). |
+| `.github/workflows/` | CI enforcing ADR-0002: SHA-pinned actions, gitleaks, Trivy scan, CycloneDX SBOM, image scan, OPA policy tests. See [`.github/workflows/README.md`](.github/workflows/README.md). |
 | `skills/` | Reusable, tool-neutral agent playbooks (the single source of truth — see below). |
 
 ## Skills — reusable playbooks (prefer these for common tasks)

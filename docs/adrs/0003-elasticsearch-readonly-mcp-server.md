@@ -72,12 +72,12 @@ ArchUnit-enforced internal architecture and a ≥90% coverage release gate.
 | **Tools exposed** | `listIndices`, `describeIndex` (mappings + settings), `search` (query DSL, bounded), `getDocument` (by id), `count`. Closed set; adding one is a threat-model + review event (ADR-0001 §23/§25). |
 | **Query guard** | A read-only **`QueryGuard`** (analogous to the DB server's `SqlGuard`): allow only search/read request shapes; **reject** `script`/`script_score`/`runtime_mappings` scripting, `_msearch`, `_sql`, `_painless_execute`, update-by-query, delete-by-query, and any mutating endpoint. |
 | **Index allowlist** | Tools operate only on indices in a configured **allowlist** (logical name → concrete index/alias). Wildcards resolve **within** the allowlist; `.`-prefixed system/internal indices are denied. Unlisted index → fail closed. |
-| **Result bounding** | Mandatory `size`/`from` caps and `max_result_window` ceiling; default and max page size; per-request `timeout`; `terminate_after` guard; `_source` field projection driven by gateway obligations. Deep pagination beyond the window is denied (use a bounded `search_after`, not unbounded scroll). |
-| **ES connection** | Official Elasticsearch Java client over **TLS**, authenticated with a **least-privilege** API key/role: `read` + `view_index_metadata` on allowlisted indices **only**; no write, no cluster-admin, no `manage`. Credentials are dynamic/short-lived from Vault where available (ADR-0001 §11). |
-| **Server safety contract** | Implements ADR-0001 §4 and the `tests/server-contract` suite (QA-10): gateway-only audience-bound tokens, obligation enforcement (row cap, field projection, redaction, tokenization), resource/purpose scoping, structured audit without raw payloads, fail-closed on missing classification. |
+| **Result bounding** | Mandatory `size`/`from` caps and `max_result_window` ceiling; default and max page size; per-request `timeout`; `terminate_after` guard; `_source` field projection is restricted to a configured per-index allowlist supplied from gateway/policy obligations. Deep pagination beyond the window is denied (use a bounded `search_after`, not unbounded scroll). |
+| **ES connection** | Official Elasticsearch low-level REST client over **TLS**, authenticated with a **least-privilege** API key/role: `read` + `view_index_metadata` on allowlisted indices **only**; no write, no cluster-admin, no `manage`. Credentials are dynamic/short-lived from Vault where available (ADR-0001 §11). |
+| **Server safety contract** | Implements the server-owned parts of ADR-0001 §4 and the `tests/server-contract` suite (QA-10): result bounds, source-field projection, index/resource scoping, read-only behavior, and unsafe logging prevention. Gateway/transport-owned cases (audience-bound token validation, policy decision context, redaction/tokenization, and audit-of-record emission) remain gateway responsibilities and require black-box gateway integration tests before production. |
 | **Internal architecture** | Enforced by **ArchUnit** (see §2.1). Hexagonal-ish layering: `tool/api → service (domain) → port → elasticsearch adapter`. The ES client is reachable **only** through the adapter package. |
-| **Coverage gate** | **JaCoCo** with a build-failing threshold: **≥90%** (line + branch) on the coverage-relevant scope; CI fails below it. ArchUnit + contract + unit + Testcontainers integration tests all run in CI. |
-| **Observability** | OpenTelemetry SDK + OTLP only — no vendor agent (ADR-0001 §10). Audit metadata carries query hash, index(es), tool+version, decision id; never raw documents. |
+| **Coverage gate** | **JaCoCo** with a build-failing threshold: **≥90%** (line + branch) on the coverage-relevant scope; CI fails below it. ArchUnit + server-owned contract checks + unit + Testcontainers integration tests all run in CI. |
+| **Observability** | No raw document logging in server code; audit-of-record is emitted by the gateway. If server-local telemetry is added, it must use OpenTelemetry SDK + OTLP only — no vendor agent (ADR-0001 §10). |
 | **Optional local auth gate** | An optional bearer/API-key gate for non-gateway/dev contexts (off when blank), mirroring the DB server; **never** a substitute for the gateway in production. |
 
 ### 2.1 ArchUnit-enforced internal rules (normative)
@@ -122,15 +122,15 @@ blocking. The internal architecture **must** satisfy at least:
   allowlist make the dangerous Elasticsearch surface unreachable by construction;
   ArchUnit keeps the datastore encapsulated so the security properties don't erode
   as the code grows; the coverage gate keeps the contract tests honest.
-- **Negative / trade-offs:** Java 25 is recent — toolchain/base-image and library
-  support must be confirmed (open item). A closed tool set and strict guard mean
+- **Negative / trade-offs:** Java 25 is recent, so teams must keep the toolchain,
+  base images, and Spring AI line actively patched. A closed tool set and strict guard mean
   legitimately new query shapes require an ADR/threat-model touch, not just a code
   change. A ≥90% gate adds test-authoring cost, especially around the adapter
   (mitigated with Testcontainers).
-- **Follow-on work:** the OPA/Rego `read`-tier rules + index/field obligations for
-  these tools (ADR-0001 §5, `policy/`); the gateway route + audience binding for
-  this server; the per-environment index allowlist and ES least-privilege role;
-  wiring `tests/server-contract` (QA-10) into this server's CI.
+- **Follow-on work:** the gateway route + audience binding for this server; the
+  per-environment index allowlist, source-field allowlist, classification source,
+  and ES least-privilege role; black-box `tests/server-contract` (QA-10) coverage
+  through the gateway/HTTP surface.
 
 ## 5. Threat Model
 
@@ -142,10 +142,10 @@ Every threat names its primary control(s).
 | E1 | **Query-DSL injection / scripting RCE** | Model-supplied query embeds `script`/`script_score`/`runtime_mappings` (Painless) → code execution | `QueryGuard` rejects all scripting and non-search request shapes; ArchUnit A3 forbids mutation/scripting client calls; least-privilege ES role lacks scripting where possible (maps T1) |
 | E2 | **Index/scope widening** | Query targets an unlisted index, a `*` wildcard, or `.`-prefixed system index to read beyond grant | Index **allowlist**; wildcards resolved within allowlist; system indices denied; fail-closed on unlisted (maps T7/§24) |
 | E3 | **Over-collection / bulk exfiltration** | Huge `size`, deep pagination, or unbounded scroll to vacuum an index | Mandatory `size`/`from` caps, `max_result_window` ceiling, `terminate_after`, request timeout; bulk reads correlated upstream (ADR-0001 §16) (maps T7) |
-| E4 | **Field-level over-exposure** | Returning `_source` fields the purpose doesn't need (e.g., PII columns) | Gateway field-projection/redaction obligations applied before response (ADR-0001 §4 C2/C3); `_source` filtering in the adapter (maps T7) |
+| E4 | **Field-level over-exposure** | Returning `_source` fields the purpose doesn't need (e.g., PII columns) | Gateway field-projection/redaction obligations define the allowed field set (ADR-0001 §4 C2/C3); the server enforces a configured per-index `_source` allowlist before reaching the adapter (maps T7) |
 | E5 | **Confused deputy via ES credential** | Server's broad ES API key reads data the user may not see | Least-privilege role (`read`+`view_index_metadata` on allowlisted indices only); gateway-scoped, audience-bound token required; no god-credential (maps T2/T3) |
-| E6 | **Regulated payload in logs/audit** | Document bodies (PHI/PAN/PII) written to logs or traces | Structured audit = hashes/ids/metadata only; SLF4J-only + redaction (ArchUnit A5); contract test C5 (maps T10/§6) |
-| E7 | **Unlabeled-data leakage** | Index/doc lacks a classification label and is served anyway | Fail closed: unknown classification → Restricted → denied unless explicitly granted (ADR-0001 §24; contract C6) |
+| E6 | **Regulated payload in logs/audit** | Document bodies (PHI/PAN/PII) written to logs or traces | Server code avoids uncontrolled logging sinks and raw document logs; structured audit-of-record is emitted by the gateway with hashes/ids/metadata only (ArchUnit A5; contract test C5 subset; maps T10/§6) |
+| E7 | **Unlabeled-data leakage** | Index/doc lacks a classification label and is served anyway | Gateway/PDP fail closed: unknown classification → Restricted → denied unless explicitly granted (ADR-0001 §24); server fails closed on missing allowlist/source-field configuration (contract C6 subset) |
 | E8 | **Direct (gateway-bypassing) access** | Caller reaches the server's `/elastic` directly, skipping gateway controls | Network policy: ingress only from gateway (ADR-0001 §4); optional local auth gate is defense-in-depth, not the control |
 | E9 | **Token passthrough / wrong audience** | Raw client token or wrong-audience token accepted | Accept only gateway-minted, audience-bound tokens; reject raw/expired/missing (contract C1; maps T3) |
 
@@ -160,12 +160,12 @@ server* contributes or enforces locally.
 |---|---|---|---|---|
 | Read-only mandate + `QueryGuard` (no write/script paths) | ✓ (integrity, purpose limit) | ✓ (min necessary) | ✓ (Req. 7 least function) | ✓ (CC6/CC8) |
 | Index allowlist + fail-closed scoping | ✓ (data minimization) | ✓ (access control) | ✓ (Req. 7) | ✓ (CC6) |
-| Result/field bounding + projection obligations | ✓ (minimization, Art. 5) | ✓ (min necessary §164.514) | ✓ (scope reduction) | ✓ (CC6) |
-| Gateway-only, audience-bound token enforcement | ✓ (accountability) | ✓ (access control §164.312(a)) | ✓ (Req. 7/8) | ✓ (CC6) |
+| Result bounding + configured source-field allowlists | ✓ (minimization, Art. 5) | ✓ (min necessary §164.514) | ✓ (scope reduction) | ✓ (CC6) |
+| Gateway-only, audience-bound token enforcement (gateway + network policy) | ✓ (accountability) | ✓ (access control §164.312(a)) | ✓ (Req. 7/8) | ✓ (CC6) |
 | Least-privilege ES role (read + view_index_metadata) | ✓ (Art. 32) | ✓ (access control) | ✓ (Req. 7) | ✓ (CC6) |
-| Tokenize/redact obligations honored before response | ✓ (minimization) | ✓ (safeguards) | ✓ (PAN never returned raw → CDE scope) | ✓ (CC6) |
-| Structured audit, no raw payloads; OTLP to platform sink | ✓ (Art. 30) | ✓ (audit §164.312(b)) | ✓ (Req. 10) | ✓ (CC7) |
-| Fail-closed on missing classification (→ Restricted) | ✓ (Art. 5/9) | ✓ (min necessary) | ✓ (scope) | ✓ (CC3/CC6) |
+| Tokenize/redact obligations honored before response by the gateway; server source allowlist is defense in depth | ✓ (minimization) | ✓ (safeguards) | ✓ (PAN never returned raw → CDE scope) | ✓ (CC6) |
+| No raw payload logging in server; structured audit-of-record emitted by gateway | ✓ (Art. 30) | ✓ (audit §164.312(b)) | ✓ (Req. 10) | ✓ (CC7) |
+| Fail-closed on missing classification in gateway/PDP; server fails closed on missing allowlist/source-field grants | ✓ (Art. 5/9) | ✓ (min necessary) | ✓ (scope) | ✓ (CC3/CC6) |
 | TLS in transit to Elasticsearch | ✓ (Art. 32) | ✓ (transmission security) | ✓ (Req. 4) | ✓ (CC6) |
 
 AI-governance overlays (EU AI Act · NIST AI RMF · ISO/IEC 42001) and FedRAMP
@@ -174,8 +174,8 @@ this server.
 
 ## 7. Open Items / Next Decisions
 
-- [ ] Confirm **Java 25** base-image + Spring Boot 3.5.x / Spring AI MCP starter
-      compatibility on Java 25; pin exact GA versions (build owner).
+- [x] Confirm **Java 25** base-image + Spring Boot 3.5.x / Spring AI MCP starter
+      compatibility on Java 25; pin exact GA versions (build owner). **Done:** Maven/Spring versions and Java 25 Temurin build/runtime images are pinned in `pom.xml` and `docker/Dockerfile`.
 - [ ] Define the per-environment **index allowlist** (logical name → index/alias)
       and the **classification label** source for each index (data governance).
 - [ ] Provision the **least-privilege Elasticsearch role/API key** and decide
@@ -185,15 +185,17 @@ this server.
       (data-driven `read_row_cap`) + `project_source` minimisation obligations added to
       `policy/authz.rego`; ES authorization tests in `policy/authz_elastic_test.rego`
       (`opa test policy/` → 26/26). Example index grants in `policy/data.json`.
-- [ ] Decide page-size **defaults and ceilings** and the `search_after` strategy vs.
-      `max_result_window` (server owner).
+- [x] Decide page-size **defaults and ceilings** and the `search_after` strategy vs.
+      `max_result_window` (server owner). **Done:** default/max page size, `max_result_window`, request timeout, and `terminate_after` are configured in `application.yml`; requests beyond the window fail closed with guidance to narrow the query or use `search_after`.
 - [x] Confirm the **JaCoCo coverage scope** (exclusions for generated/config code)
       and whether the 90% gate is line, branch, or both (server owner). **Done:** gate is
       **line + branch ≥ 0.90**, excluding entrypoint/config/adapter/`domain.model` (see `pom.xml`).
-- [ ] Wire `tests/server-contract` (QA-10) into this server's CI and add the
-      release-blocking CI jobs (MCP platform owner). **Partly done:** ArchUnit (A1–A7) and the
-      Testcontainers ES adapter IT (`mvn verify`, failsafe) are implemented and green; the
-      server-contract suite and the CI workflow itself are still to wire.
+- [ ] Complete black-box `tests/server-contract` (QA-10) coverage through the gateway/HTTP surface
+      (MCP platform owner). **Partly done:** server-owned JUnit checks, ArchUnit (A1–A7), CI, and the
+      Testcontainers ES adapter IT (`mvn verify`, failsafe) are wired. Gateway-owned token binding,
+      policy-decision context, audit-of-record, and redaction/tokenization cases still require an
+      integration harness against the gateway route.
+- [ ] Wire server-local OpenTelemetry/OTLP spans if local telemetry beyond gateway audit is required.
 - [ ] Assign the accountable **owner** before moving past `draft`.
 
 ---
@@ -205,7 +207,8 @@ this server.
 - **Index allowlist** — configured set of logical→concrete indices the server may
   touch; everything else fails closed.
 - **Server safety contract** — the minimum local contract every MCP server honors
-  (ADR-0001 §4); tested by `tests/server-contract` (QA-10).
+  (ADR-0001 §4). This server has release-gated server-owned checks; full QA-10
+  gateway/HTTP black-box coverage remains a follow-up.
 - **ArchUnit** — JVM library that asserts architecture rules (layering, dependency
   direction, naming, cycles) as ordinary tests.
 - **JaCoCo** — JVM code-coverage tool; used here with a build-failing ≥90% threshold.

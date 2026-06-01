@@ -62,7 +62,8 @@ public class SearchService {
                     "Pagination beyond max_result_window (" + limits.maxResultWindow()
                             + ") is not allowed; narrow the query or use search_after");
         }
-        SearchPort.SearchPage page = port.search(concrete, body, effSize, effFrom, sourceFields);
+        List<String> effectiveSourceFields = allowlist.sourceFieldsFor(logicalName, sourceFields);
+        SearchPort.SearchPage page = port.search(concrete, body, effSize, effFrom, effectiveSourceFields);
         return new SearchResultPage(logicalName, page.totalHits(), page.totalIsLowerBound(), page.hits());
     }
 
@@ -79,7 +80,8 @@ public class SearchService {
             throw new QueryNotAllowedException("Document id must not be empty");
         }
         String concrete = allowlist.resolve(logicalName);
-        DocumentResult raw = port.getDocument(concrete, id, sourceFields);
+        List<String> effectiveSourceFields = allowlist.sourceFieldsFor(logicalName, sourceFields);
+        DocumentResult raw = port.getDocument(concrete, id, effectiveSourceFields);
         return new DocumentResult(logicalName, id, raw.found(), raw.source());
     }
 

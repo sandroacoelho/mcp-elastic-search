@@ -20,20 +20,20 @@ Java 25 + Spring Boot (Spring AI MCP server, HTTP/SSE). Base package `ai.enterpr
 
 | Aspect | Detail |
 |---|---|
-| **Stack** | Java 25 · Spring Boot 3.5.4 · Spring AI 1.1.2 (`spring-ai-starter-mcp-server-webmvc`) · Elasticsearch low-level REST client |
+| **Stack** | Java 25 · Spring Boot 3.5.4 · Spring AI 1.1.7 (`spring-ai-starter-mcp-server-webmvc`) · Elasticsearch low-level REST client |
 | **Tools** (closed set, read-only) | `listIndices` · `describeIndex` · `search` · `getDocument` · `count` |
 | **Query guard** | `QueryGuard` rejects scripting (`script`, `script_score`, `runtime_mappings`, …), `_msearch`/`_sql`, and any non-search body shape |
 | **Index allowlist** | logical→concrete mapping; unlisted and `.`-prefixed system indices **fail closed** |
-| **Result bounding** | page-size cap, `max_result_window` ceiling, request timeout, `_source` projection |
+| **Result bounding** | page-size cap, `max_result_window` ceiling, `terminate_after`, request timeout, configured `_source` allowlist |
 | **Architecture** | Hexagonal `tool → service → port → adapter`; ES client confined to `adapter` (enforced by ArchUnit A1–A7) |
-| **Quality gates** | JaCoCo **≥90% line+branch** (build-failing) · ArchUnit · server-contract suite (QA-10) · Testcontainers ES integration test |
+| **Quality gates** | JaCoCo **≥90% line+branch** (build-failing) · ArchUnit · server-owned contract checks · Testcontainers ES integration test |
 
 ### Build & test
 
 ```bash
 cd server
 
-# Unit tests + ArchUnit + server-contract + ≥90% coverage gate (no Docker needed)
+# Unit tests + ArchUnit + server-owned contract checks + ≥90% coverage gate (no Docker needed)
 mvn test
 
 # Adds the Testcontainers Elasticsearch adapter integration test (needs Docker)
@@ -52,8 +52,12 @@ mcpes:
     host: ${ES_HOST:https://localhost:9200}
     api-key: ${ES_API_KEY:}        # least-privilege: read + view_index_metadata on allowlisted indices only
   allowlist:
-    sample: sample-v1              # logicalName -> concrete index/alias
-  limits: { default-page-size: 10, max-page-size: 100, max-result-window: 10000, request-timeout-seconds: 10 }
+    products: products-v1          # logicalName -> concrete index/alias
+    customers: customers-v3
+  source-fields:
+    products: [id, name, price]    # policy-approved _source fields per logical index
+    customers: [id, name, status]
+  limits: { default-page-size: 10, max-page-size: 100, max-result-window: 10000, request-timeout-seconds: 10, terminate-after: 10000 }
 ```
 
 Transport is Streamable HTTP/SSE (`GET /elastic`), default port `9090` — reachable **only**
@@ -101,7 +105,7 @@ opa check policy/ && opa fmt --fail policy/ && opa test policy/ -v   # 26/26
 
 | Workflow | Jobs |
 |---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `server-verify` (`mvn verify`: tests + ArchUnit + coverage + Testcontainers IT) · `policy-gate` (`opa check/fmt/test`) |
+| [`ci.yml`](.github/workflows/ci.yml) | `server-verify` (`mvn verify`: tests + ArchUnit + server-owned contract checks + coverage + Testcontainers IT) · `policy-gate` (`opa check/fmt/test`) |
 | [`supply-chain.yml`](.github/workflows/supply-chain.yml) | gitleaks · Trivy fs · CycloneDX SBOM · image build + scan (ADR-0002) |
 
 All actions are pinned by full commit SHA. See [`.github/workflows/README.md`](.github/workflows/README.md).
@@ -126,7 +130,7 @@ Reusable playbooks: `new-adr`, `review-design-doc`, `compliance-check`, `init-pr
 
 ## Status & next steps
 
-ADR-0003 is **draft**. Implemented: server + guard rails, ArchUnit, ≥90% coverage gate,
-server-contract suite, Testcontainers IT, read-tier OPA policy, CI. Open (ADR-0003 §7):
-per-environment index allowlist + least-privilege ES role, gateway route/audience binding,
-page-size defaults, and an assigned owner before the ADR advances past `draft`.
+ADR-0003 is **draft**. Implemented: server + guard rails, source-field allowlists, ArchUnit, ≥90% coverage gate,
+server-owned contract checks, Testcontainers IT, read-tier OPA policy, CI. Open (ADR-0003 §7):
+per-environment index allowlist + least-privilege ES role, full black-box gateway/HTTP contract,
+gateway route/audience binding, audit/OTLP wiring, and an assigned owner before the ADR advances past `draft`.

@@ -8,6 +8,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -70,6 +77,34 @@ class ArchitectureTest {
         rule.check(PRODUCTION_CLASSES);
     }
 
+
+    // A3 — no raw mutation API surface in production Elasticsearch calls.
+
+    @Test
+    void no_mutating_elasticsearch_endpoints_in_production_code() throws IOException {
+        Path sourceRoot = Path.of("src/main/java/ai/enterprise/mcp/elastic");
+        List<String> forbiddenFragments = List.of(
+                "new Request(\"PUT\"",
+                "new Request(\"DELETE\"",
+                "new Request(\"PATCH\"",
+                "_bulk",
+                "_update",
+                "_delete_by_query",
+                "_update_by_query",
+                "_reindex",
+                "_ingest");
+
+        try (var files = Files.walk(sourceRoot)) {
+            List<Path> offenders = files
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> containsAny(path, forbiddenFragments))
+                    .toList();
+            assertThat(offenders)
+                    .as("Production code must not construct Elasticsearch mutation endpoints (ADR-0003 A3)")
+                    .isEmpty();
+        }
+    }
+
     // A4 — tool-registration discipline.
 
     @Test
@@ -113,5 +148,14 @@ class ArchitectureTest {
         ArchRule rule = fields().should().notBeAnnotatedWith(Autowired.class)
                 .as("Use constructor injection, not @Autowired fields (ADR-0003 A7)");
         rule.check(PRODUCTION_CLASSES);
+    }
+
+    private static boolean containsAny(Path path, List<String> fragments) {
+        try {
+            String text = Files.readString(path);
+            return fragments.stream().anyMatch(text::contains);
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to inspect " + path, e);
+        }
     }
 }

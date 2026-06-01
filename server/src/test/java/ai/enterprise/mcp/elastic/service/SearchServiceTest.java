@@ -29,7 +29,7 @@ class SearchServiceTest {
         Map<String, String> allow = new LinkedHashMap<>();
         allow.put("customers", "customers-v3");
         allow.put("secret", ".internal");
-        IndexAllowlist allowlist = new IndexAllowlist(allow);
+        IndexAllowlist allowlist = new IndexAllowlist(allow, Map.of("customers", List.of("id", "name")));
         SearchLimits limits = new SearchLimits(10, 100, 10_000, 10);
         service = new SearchService(port, new QueryGuard(), allowlist, limits);
     }
@@ -77,6 +77,7 @@ class SearchServiceTest {
         service.search("customers", null, 500, -3, List.of("name"));
         assertThat(port.lastSize).isEqualTo(100);   // capped at maxPageSize
         assertThat(port.lastFrom).isEqualTo(0);
+        assertThat(port.lastSourceFields).containsExactly("name");
     }
 
     @Test
@@ -91,6 +92,13 @@ class SearchServiceTest {
         assertThatThrownBy(() -> service.search("customers", null, 100, 9_999, null))
                 .isInstanceOf(QueryNotAllowedException.class)
                 .hasMessageContaining("max_result_window");
+    }
+
+    @Test
+    void searchRejectsDisallowedSourceFields() {
+        assertThatThrownBy(() -> service.search("customers", null, 10, 0, List.of("ssn")))
+                .isInstanceOf(QueryNotAllowedException.class)
+                .hasMessageContaining("Source field");
     }
 
     @Test

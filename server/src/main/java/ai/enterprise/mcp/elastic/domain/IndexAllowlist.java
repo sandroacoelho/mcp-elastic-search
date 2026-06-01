@@ -1,6 +1,7 @@
 package ai.enterprise.mcp.elastic.domain;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -14,10 +15,16 @@ import java.util.Set;
 public class IndexAllowlist {
 
     private final Map<String, String> logicalToConcrete;
+    private final Map<String, List<String>> allowedSourceFields;
 
     public IndexAllowlist(Map<String, String> logicalToConcrete) {
+        this(logicalToConcrete, Map.of());
+    }
+
+    public IndexAllowlist(Map<String, String> logicalToConcrete, Map<String, List<String>> allowedSourceFields) {
         // Defensive copy; preserve insertion order for stable listings.
         this.logicalToConcrete = new LinkedHashMap<>(logicalToConcrete == null ? Map.of() : logicalToConcrete);
+        this.allowedSourceFields = new LinkedHashMap<>(allowedSourceFields == null ? Map.of() : allowedSourceFields);
     }
 
     /** Logical names the caller may reference. */
@@ -56,5 +63,26 @@ public class IndexAllowlist {
                 .filter(e -> e.getValue().equals(concreteIndex))
                 .map(Map.Entry::getKey)
                 .findFirst();
+    }
+
+    /**
+     * Return the policy-approved _source projection for a logical index. If the
+     * caller requests a subset, every field must already be in the configured set.
+     * An index with no configured source fields returns an empty projection rather
+     * than the full document source.
+     */
+    public List<String> sourceFieldsFor(String logicalName, List<String> requestedFields) {
+        resolve(logicalName);
+        List<String> allowed = allowedSourceFields.getOrDefault(logicalName, List.of());
+        if (requestedFields == null || requestedFields.isEmpty()) {
+            return List.copyOf(allowed);
+        }
+        for (String field : requestedFields) {
+            if (!allowed.contains(field)) {
+                throw new QueryNotAllowedException("Source field '" + field + "' is not allowed for index '"
+                        + logicalName + "'");
+            }
+        }
+        return List.copyOf(requestedFields);
     }
 }

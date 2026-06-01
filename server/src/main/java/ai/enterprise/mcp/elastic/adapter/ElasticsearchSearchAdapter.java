@@ -36,11 +36,13 @@ public class ElasticsearchSearchAdapter implements SearchPort {
     private final RestClient client;
     private final ObjectMapper mapper;
     private final int timeoutSeconds;
+    private final int terminateAfter;
 
     public ElasticsearchSearchAdapter(RestClient client, ObjectMapper mapper, ElasticsearchProperties props) {
         this.client = client;
         this.mapper = mapper;
         this.timeoutSeconds = props.getLimits().getRequestTimeoutSeconds();
+        this.terminateAfter = props.getLimits().getTerminateAfter();
     }
 
     @Override
@@ -71,7 +73,8 @@ public class ElasticsearchSearchAdapter implements SearchPort {
         req.put("size", size);
         req.put("from", from);
         req.put("timeout", timeoutSeconds + "s");
-        if (sourceFields != null && !sourceFields.isEmpty()) {
+        req.put("terminate_after", terminateAfter);
+        if (sourceFields != null) {
             req.put("_source", sourceFields);
         }
         Request request = new Request("POST", "/" + enc(concreteIndex) + "/_search");
@@ -100,6 +103,7 @@ public class ElasticsearchSearchAdapter implements SearchPort {
     @Override
     public long count(String concreteIndex, Map<String, Object> body) {
         Request request = new Request("POST", "/" + enc(concreteIndex) + "/_count");
+        request.addParameter("terminate_after", String.valueOf(terminateAfter));
         if (body != null && body.containsKey("query")) {
             request.setJsonEntity(toJson(Map.of("query", body.get("query"))));
         }
@@ -110,7 +114,9 @@ public class ElasticsearchSearchAdapter implements SearchPort {
     @Override
     public DocumentResult getDocument(String concreteIndex, String id, List<String> sourceFields) {
         Request request = new Request("GET", "/" + enc(concreteIndex) + "/_doc/" + enc(id));
-        if (sourceFields != null && !sourceFields.isEmpty()) {
+        if (sourceFields != null && sourceFields.isEmpty()) {
+            request.addParameter("_source", "false");
+        } else if (sourceFields != null) {
             request.addParameter("_source_includes", String.join(",", sourceFields));
         }
         try {

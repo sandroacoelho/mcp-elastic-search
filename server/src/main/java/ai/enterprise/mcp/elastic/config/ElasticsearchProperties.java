@@ -2,6 +2,7 @@ package ai.enterprise.mcp.elastic.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,6 +15,8 @@ import java.util.Map;
  *     api-key: ${ES_API_KEY}
  *   allowlist:               # logical name -> concrete index/alias
  *     customers: customers-v3
+ *   source-fields:           # policy-approved _source fields per logical index
+ *     customers: [id, name, status]
  *   limits:
  *     default-page-size: 10
  *     max-page-size: 100
@@ -26,6 +29,7 @@ public class ElasticsearchProperties {
 
     private Connection connection = new Connection();
     private Map<String, String> allowlist = Map.of();
+    private Map<String, List<String>> sourceFields = Map.of();
     private Limits limits = new Limits();
 
     public Connection getConnection() {
@@ -42,6 +46,14 @@ public class ElasticsearchProperties {
 
     public void setAllowlist(Map<String, String> allowlist) {
         this.allowlist = allowlist;
+    }
+
+    public Map<String, List<String>> getSourceFields() {
+        return sourceFields;
+    }
+
+    public void setSourceFields(Map<String, List<String>> sourceFields) {
+        this.sourceFields = sourceFields;
     }
 
     public Limits getLimits() {
@@ -80,6 +92,7 @@ public class ElasticsearchProperties {
         private int maxPageSize = 100;
         private int maxResultWindow = 10_000;
         private int requestTimeoutSeconds = 10;
+        private int terminateAfter = 10_000;
 
         public int getDefaultPageSize() {
             return defaultPageSize;
@@ -111,6 +124,14 @@ public class ElasticsearchProperties {
 
         public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
             this.requestTimeoutSeconds = requestTimeoutSeconds;
+        }
+
+        public int getTerminateAfter() {
+            return terminateAfter;
+        }
+
+        public void setTerminateAfter(int terminateAfter) {
+            this.terminateAfter = terminateAfter;
         }
     }
 }

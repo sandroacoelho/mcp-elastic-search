@@ -48,7 +48,8 @@ class ServerContractTest {
     }
 
     private static SearchService service(FakeSearchPort port) {
-        IndexAllowlist allowlist = new IndexAllowlist(Map.of("products", "products-v1"));
+        IndexAllowlist allowlist = new IndexAllowlist(
+                Map.of("products", "products-v1"), Map.of("products", List.of("id", "name")));
         return new SearchService(port, new QueryGuard(), allowlist, new SearchLimits(10, 100, 10_000, 10));
     }
 
@@ -137,6 +138,13 @@ class ServerContractTest {
             SearchService svc = new SearchService(new FakeSearchPort(), new QueryGuard(),
                     new IndexAllowlist(Map.of("internal", ".kibana")), new SearchLimits(10, 100, 10_000, 10));
             assertThatThrownBy(() -> svc.search("internal", null, 10, 0, null))
+                    .isInstanceOf(QueryNotAllowedException.class);
+        }
+
+        @Test
+        @DisplayName("C4.3 — source projection cannot be widened beyond allowed fields")
+        void rejectsDisallowedSourceField() {
+            assertThatThrownBy(() -> service().search("products", null, 10, 0, List.of("pan")))
                     .isInstanceOf(QueryNotAllowedException.class);
         }
 

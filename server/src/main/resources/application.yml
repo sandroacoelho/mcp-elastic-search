@@ -37,12 +37,19 @@ mcpes:
     api-key: ${ES_API_KEY:}
   # Logical name -> concrete index/alias. Only these are readable; everything else fails closed.
   allowlist:
-    sample: sample-v1
+    products: products-v1
+    customers: customers-v3
+  # Policy-approved _source fields per logical index. Requests for fields outside
+  # these lists fail closed; an index without a list returns no _source fields.
+  source-fields:
+    products: [id, name, price]
+    customers: [id, name, status]
   limits:
     default-page-size: 10
     max-page-size: 100
     max-result-window: 10000
     request-timeout-seconds: 10
+    terminate-after: 10000
 
 logging:
   level:

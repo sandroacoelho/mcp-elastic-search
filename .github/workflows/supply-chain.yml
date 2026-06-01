@@ -8,7 +8,7 @@ name: Supply Chain Security
 #   - SBOM generation (Trivy → CycloneDX)                              (§3)
 #   - container image build + image vulnerability scan                 (§2)
 #
-# Re-pinning the action SHAs is a deliberate, reviewed change — see .github/README.md.
+# Re-pinning the action SHAs is a deliberate, reviewed change — see .github/workflows/README.md.
 
 on:
   pull_request:

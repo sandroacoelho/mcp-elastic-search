@@ -24,7 +24,7 @@ public class DomainConfig {
 
     @Bean
     public IndexAllowlist indexAllowlist(ElasticsearchProperties props) {
-        return new IndexAllowlist(props.getAllowlist());
+        return new IndexAllowlist(props.getAllowlist(), props.getSourceFields());
     }
 
     @Bean

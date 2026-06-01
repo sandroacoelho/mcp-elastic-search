@@ -3,6 +3,7 @@ package ai.enterprise.mcp.elastic.domain;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,7 +15,7 @@ class IndexAllowlistTest {
         Map<String, String> map = new LinkedHashMap<>();
         map.put("customers", "customers-v3");
         map.put("secret", ".internal-index");
-        return new IndexAllowlist(map);
+        return new IndexAllowlist(map, Map.of("customers", List.of("id", "name")));
     }
 
     @Test
@@ -35,6 +36,13 @@ class IndexAllowlistTest {
     @Test
     void rejectsBlankName() {
         assertThatThrownBy(() -> allowlist().resolve(" "))
+                .isInstanceOf(QueryNotAllowedException.class)
+                .hasMessageContaining("must not be empty");
+    }
+
+    @Test
+    void rejectsNullName() {
+        assertThatThrownBy(() -> allowlist().resolve(null))
                 .isInstanceOf(QueryNotAllowedException.class)
                 .hasMessageContaining("must not be empty");
     }
@@ -67,5 +75,33 @@ class IndexAllowlistTest {
         IndexAllowlist a = allowlist();
         assertThat(a.logicalFor("customers-v3")).contains("customers");
         assertThat(a.logicalFor("nope")).isEmpty();
+    }
+
+    @Test
+    void sourceFieldsDefaultToConfiguredAllowlist() {
+        assertThat(allowlist().sourceFieldsFor("customers", null)).containsExactly("id", "name");
+        assertThat(allowlist().sourceFieldsFor("customers", List.of())).containsExactly("id", "name");
+    }
+
+    @Test
+    void sourceFieldsAllowConfiguredSubset() {
+        assertThat(allowlist().sourceFieldsFor("customers", List.of("name"))).containsExactly("name");
+    }
+
+    @Test
+    void sourceFieldsRejectUnlistedField() {
+        assertThatThrownBy(() -> allowlist().sourceFieldsFor("customers", List.of("ssn")))
+                .isInstanceOf(QueryNotAllowedException.class)
+                .hasMessageContaining("Source field");
+    }
+
+    @Test
+    void sourceFieldsForUnconfiguredIndexReturnsEmptyProjection() {
+        assertThat(new IndexAllowlist(Map.of("logs", "logs-v1")).sourceFieldsFor("logs", null)).isEmpty();
+    }
+
+    @Test
+    void nullSourceFieldMapReturnsEmptyProjection() {
+        assertThat(new IndexAllowlist(Map.of("logs", "logs-v1"), null).sourceFieldsFor("logs", null)).isEmpty();
     }
 }

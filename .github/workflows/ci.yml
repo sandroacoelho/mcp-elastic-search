@@ -3,7 +3,7 @@ name: CI — Build & Release Gates
 # Release-blocking quality gates for the Elasticsearch read-only MCP server (ADR-0003)
 # and the OPA authorization policy (ADR-0001 §5):
 #   - server-verify : mvn verify = unit tests + ArchUnit (A1–A7) + JaCoCo ≥90% line/branch
-#                     + server-contract suite (QA-10) + Testcontainers ES adapter IT
+#                     + server-owned contract checks (QA-10 subset) + Testcontainers ES adapter IT
 #   - policy-gate   : opa check / fmt / test (deny-by-default + read-tier obligations)
 #
 # Conventions (shared with supply-chain.yml, per ADR-0002):
@@ -41,7 +41,7 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      # `mvn verify` runs surefire (unit + ArchUnit + server-contract) with the JaCoCo
+      # `mvn verify` runs surefire (unit + ArchUnit + server-owned contract checks) with the JaCoCo
       # ≥90% gate, then failsafe (Testcontainers ES adapter IT). ubuntu-latest ships a
       # Docker daemon, so the integration test runs; the pom pins the Docker API version
       # for it (api.version=1.40) to satisfy modern engines.
