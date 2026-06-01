@@ -1,88 +1,110 @@
-# Secure MCP Service — Blueprint Template
+# mcp-elastic-search — Read-Only Elasticsearch MCP Server
 
-A **clone-and-fill template** for designing and governing a secure,
-language-agnostic **Model Context Protocol (MCP)** service for highly regulated
-corporate environments. The binding compliance regimes are **GDPR, LGPD, HIPAA,
-PCI-DSS, and SOC2**, with **FedRAMP Moderate** alignment and AI-governance
-overlays (**EU AI Act · NIST AI RMF · ISO/IEC 42001**) layered on top — see
-ADR-0001 §13/§26.
+A secure, **read-only Elasticsearch** [Model Context Protocol (MCP)](https://modelcontextprotocol.io)
+server, built on the secure-MCP blueprint for highly regulated environments. Binding
+regimes: **GDPR, LGPD, HIPAA, PCI-DSS, SOC2**, with **FedRAMP Moderate** alignment and
+AI-governance overlays (**EU AI Act · NIST AI RMF · ISO/IEC 42001**) — see ADR-0001 §13/§26.
 
-The template's core idea, from [ADR-0001](docs/adrs/0001-secure-mcp-service-design.md):
+The design follows the platform's core principle ([ADR-0001](docs/adrs/0001-secure-mcp-service-design.md)):
 
 > **Primary security controls do not live inside the MCP servers.** They live in a
-> hardened gateway every server sits behind. Servers (Go/Java/Rust) implement
-> business logic plus a small mandatory safety contract — so the service is
-> simultaneously language-agnostic and high-security.
+> hardened gateway every server sits behind. This server implements business logic plus a
+> small mandatory **safety contract** — so the platform is language-agnostic *and* high-security.
+
+The server's own design is **[ADR-0003](docs/adrs/0003-elasticsearch-readonly-mcp-server.md)**:
+a closed, read-only tool surface with hard guard rails, behind the gateway.
+
+## The server (`server/`)
+
+Java 25 + Spring Boot (Spring AI MCP server, HTTP/SSE). Base package `ai.enterprise.mcp.elastic`.
+
+| Aspect | Detail |
+|---|---|
+| **Stack** | Java 25 · Spring Boot 3.5.4 · Spring AI 1.1.2 (`spring-ai-starter-mcp-server-webmvc`) · Elasticsearch low-level REST client |
+| **Tools** (closed set, read-only) | `listIndices` · `describeIndex` · `search` · `getDocument` · `count` |
+| **Query guard** | `QueryGuard` rejects scripting (`script`, `script_score`, `runtime_mappings`, …), `_msearch`/`_sql`, and any non-search body shape |
+| **Index allowlist** | logical→concrete mapping; unlisted and `.`-prefixed system indices **fail closed** |
+| **Result bounding** | page-size cap, `max_result_window` ceiling, request timeout, `_source` projection |
+| **Architecture** | Hexagonal `tool → service → port → adapter`; ES client confined to `adapter` (enforced by ArchUnit A1–A7) |
+| **Quality gates** | JaCoCo **≥90% line+branch** (build-failing) · ArchUnit · server-contract suite (QA-10) · Testcontainers ES integration test |
+
+### Build & test
+
+```bash
+cd server
+
+# Unit tests + ArchUnit + server-contract + ≥90% coverage gate (no Docker needed)
+mvn test
+
+# Adds the Testcontainers Elasticsearch adapter integration test (needs Docker)
+mvn verify
+```
+
+> **Docker note:** the integration test pins the Docker Engine API version
+> (`-Dapi.version=1.40`, wired in `pom.xml`) so it works on Docker Engine 25+,
+> which rejects the docker-java default of 1.32.
+
+### Configure (`server/src/main/resources/application.yml`)
+
+```yaml
+mcpes:
+  connection:
+    host: ${ES_HOST:https://localhost:9200}
+    api-key: ${ES_API_KEY:}        # least-privilege: read + view_index_metadata on allowlisted indices only
+  allowlist:
+    sample: sample-v1              # logicalName -> concrete index/alias
+  limits: { default-page-size: 10, max-page-size: 100, max-result-window: 10000, request-timeout-seconds: 10 }
+```
+
+Transport is Streamable HTTP/SSE (`GET /sse`), default port `8081` — reachable **only**
+from the gateway by network policy (ADR-0001 §4).
 
 ## What's in here
 
-This is a **documentation/blueprint template** — it ships the decision records,
-process, and authoring harness, plus a hardened reference container that embodies
-those decisions. The cloning team adds their own gateway, policies, and servers.
-
 ```
 .
-├── AGENTS.md                 # Universal agent guide (any AI CLI) — single source of truth
-├── CLAUDE.md                 # Claude Code entry point — imports AGENTS.md
-├── skills/                   # Reusable, tool-neutral agent playbooks (canonical)
-│   ├── README.md             #   how each AI CLI consumes them
-│   ├── new-adr/ · review-design-doc/ · compliance-check/ · init-project/
-│   └── software-modernization/
+├── server/                   # The Java 25 / Spring Boot MCP server (ADR-0003)
+│   ├── pom.xml               #   JaCoCo ≥90% gate · ArchUnit · failsafe Testcontainers IT
+│   └── src/main/java/ai/enterprise/mcp/elastic/   tool · service · domain · port · adapter · config
 ├── docs/
-│   ├── README.md             # Documentation index
 │   ├── adrs/
-│   │   ├── 0001-secure-mcp-service-design.md   # ADR-0001 — canonical reference design
-│   │   ├── 0002-supply-chain-security.md       # ADR-0002 — supply-chain security
-│   │   ├── _TEMPLATE.md      # ADR template
-│   │   └── README.md         # ADR index
-│   └── process/
-│       └── adr-process.md    # How ADRs are written/versioned/reviewed
-├── docker/                   # Hardened, digest-pinned reference container (builds & runs)
-│   ├── Dockerfile            #   non-root, read-only rootfs, digest-pinned base
-│   ├── docker-compose.yml    #   runtime isolation flags (ADR-0001 §9)
-│   ├── .dockerignore
-│   └── README.md             #   controls ↔ ADR mapping; how to swap in your server
-├── policy/                   # OPA/Rego authorization (PDP) — runnable + tested (ADR-0001 §5)
-│   ├── authz.rego · authz_test.rego · data.json
+│   │   ├── 0001-secure-mcp-service-design.md   # canonical reference design
+│   │   ├── 0002-supply-chain-security.md       # supply-chain security (accepted)
+│   │   ├── 0003-elasticsearch-readonly-mcp-server.md   # THIS server's design
+│   │   └── README.md           # ADR index
+│   └── process/adr-process.md  # how ADRs are written/versioned/reviewed
+├── policy/                   # OPA/Rego PDP (ADR-0001 §5): deny-by-default + read-tier obligations
+│   ├── authz.rego · authz_test.rego · authz_elastic_test.rego · data.json
 │   └── README.md
-├── tests/
-│   └── server-contract/      # Language-neutral test spec every MCP server must pass (§4/QA-10)
-├── .github/
-│   ├── workflows/
-│   │   └── supply-chain.yml  # CI: SHA-pinned actions, gitleaks, Trivy, SBOM, image scan (ADR-0002)
-│   └── README.md             # what CI enforces + SHA re-pin procedure
-├── .pre-commit-config.yaml   # Local secret scanning + hygiene (gitleaks, detect-private-key)
-├── .gitleaks.toml            # gitleaks rules + allowlist
-├── .gitignore                # Security-first: blocks secrets, keys, regulated data, audit logs
-└── .claude/
-    └── skills -> ../skills   # symlink so Claude Code discovers the canonical skills
+├── tests/server-contract/    # Language-neutral safety-contract spec (§4 / QA-10)
+├── docker/                   # Hardened, digest-pinned reference container (ADR-0001 §9)
+├── .github/workflows/
+│   ├── ci.yml                # Build & release gates: mvn verify + OPA
+│   ├── supply-chain.yml      # gitleaks · Trivy · SBOM · image scan (ADR-0002)
+│   └── README.md
+├── skills/                   # Reusable, tool-neutral agent playbooks
+├── AGENTS.md · CLAUDE.md     # Agent guide (any AI CLI) + Claude Code entry point
+└── .gitleaks.toml · .pre-commit-config.yaml · .gitignore
 ```
 
-The container builds and runs out of the box (a placeholder health service), so
-the hardening is verifiable — replace the placeholder with your MCP server. See
-[`docker/README.md`](docker/README.md).
+## Authorization policy (`policy/`)
 
-## Works with any AI CLI
+The runnable PDP from ADR-0001 §5, extended for this server: read-tier obligations
+(`cap_rows` from `read_row_cap`, `project_source` for sensitive reads) and ES-specific
+authorization tests.
 
-The agent harness is **tool-neutral**. [`AGENTS.md`](AGENTS.md) is the single
-source of truth, read by any AGENTS.md-aware assistant (OpenAI Codex, Cursor,
-Gemini CLI, Aider, Jules…). Claude Code reads [`CLAUDE.md`](CLAUDE.md), which just
-imports `AGENTS.md`, and discovers the skills through the `.claude/skills`
-symlink. One copy of every skill, no per-tool duplication — see
-[`skills/README.md`](skills/README.md).
+```bash
+opa check policy/ && opa fmt --fail policy/ && opa test policy/ -v   # 26/26
+```
 
-## Skills
+## CI — release gates
 
-Reusable, vendor-neutral playbooks in [`skills/`](skills/). When a task matches
-one, the agent opens and follows its `SKILL.md`.
-
-| Skill | Use it when… |
+| Workflow | Jobs |
 |---|---|
-| [`new-adr`](skills/new-adr/SKILL.md) | Starting a new Architecture Decision Record. |
-| [`review-design-doc`](skills/review-design-doc/SKILL.md) | Checking an ADR/design doc for completeness against repo conventions. |
-| [`compliance-check`](skills/compliance-check/SKILL.md) | Verifying a doc's controls cover every declared compliance regime. |
-| [`init-project`](skills/init-project/SKILL.md) | Filling in this template after cloning (owner, regimes, vendors…). |
-| [`software-modernization`](skills/software-modernization/SKILL.md) | Modernizing a legacy codebase safely, in small verifiable steps. |
+| [`ci.yml`](.github/workflows/ci.yml) | `server-verify` (`mvn verify`: tests + ArchUnit + coverage + Testcontainers IT) · `policy-gate` (`opa check/fmt/test`) |
+| [`supply-chain.yml`](.github/workflows/supply-chain.yml) | gitleaks · Trivy fs · CycloneDX SBOM · image build + scan (ADR-0002) |
+
+All actions are pinned by full commit SHA. See [`.github/workflows/README.md`](.github/workflows/README.md).
 
 ## Decisions (ADRs)
 
@@ -90,17 +112,21 @@ one, the agent opens and follows its `SKILL.md`.
 |---|---|---|
 | [0001](docs/adrs/0001-secure-mcp-service-design.md) | Secure, Language-Agnostic MCP Service — Architecture & Security Design | draft |
 | [0002](docs/adrs/0002-supply-chain-security.md) | Software Supply Chain Security | accepted |
+| [0003](docs/adrs/0003-elasticsearch-readonly-mcp-server.md) | Elasticsearch Read-Only MCP Server — Java 25 + Spring Boot | draft |
 
 Full list and process: [`docs/adrs/README.md`](docs/adrs/README.md) ·
 [`docs/process/adr-process.md`](docs/process/adr-process.md).
 
-## Getting started (after cloning)
+## Agent harness & skills
 
-1. **Read** [ADR-0001](docs/adrs/0001-secure-mcp-service-design.md) — the reference design.
-2. **Run the `init-project` skill** to fill in your project name, owner, chosen
-   compliance regimes, IdP, and vendors across the docs.
-3. **Write decisions** with the `new-adr` skill as you adapt the design.
-4. **Review** with `review-design-doc` and `compliance-check` before marking any
-   ADR `accepted`.
+[`AGENTS.md`](AGENTS.md) is the tool-neutral source of truth for any AI CLI; Claude Code
+reads [`CLAUDE.md`](CLAUDE.md) and discovers the [`skills/`](skills/) via `.claude/skills`.
+Reusable playbooks: `new-adr`, `review-design-doc`, `compliance-check`, `init-project`,
+`software-modernization`.
 
-See [`docs/README.md`](docs/README.md) for the full documentation map.
+## Status & next steps
+
+ADR-0003 is **draft**. Implemented: server + guard rails, ArchUnit, ≥90% coverage gate,
+server-contract suite, Testcontainers IT, read-tier OPA policy, CI. Open (ADR-0003 §7):
+per-environment index allowlist + least-privilege ES role, gateway route/audience binding,
+page-size defaults, and an assigned owner before the ADR advances past `draft`.
