@@ -24,6 +24,8 @@
         <spring-ai.version>1.1.7</spring-ai.version>
         <archunit.version>1.4.2</archunit.version>
         <jacoco.version>0.8.14</jacoco.version>
+        <elasticsearch-rest-client.version>8.18.1</elasticsearch-rest-client.version>
+        <testcontainers.version>1.21.3</testcontainers.version>
         <!-- Release gate: coverage must not drop below this (ADR-0003 §2). -->
         <coverage.min>0.90</coverage.min>
         <!-- Docker Engine API version for Testcontainers integration tests (see failsafe
@@ -41,6 +43,13 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -51,11 +60,13 @@
             <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
         </dependency>
 
-        <!-- Elasticsearch Java client (version managed by Spring Boot).
-             ArchUnit rule A2 confines its use to the ..adapter.. package. -->
+        <!-- Elasticsearch low-level REST client. Version is pinned explicitly to keep
+             the low-level adapter aligned with the Testcontainers ES image. ArchUnit
+             rule A2 confines its use to the ..adapter.. package. -->
         <dependency>
-            <groupId>co.elastic.clients</groupId>
-            <artifactId>elasticsearch-java</artifactId>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>elasticsearch-rest-client</artifactId>
+            <version>${elasticsearch-rest-client.version}</version>
         </dependency>
 
         <!-- Config metadata for @ConfigurationProperties -->
@@ -86,9 +97,8 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Integration testing of the live-Elasticsearch adapter (versions managed
-             by Spring Boot's testcontainers BOM). Skipped automatically when Docker
-             is unavailable (disabledWithoutDocker). -->
+        <!-- Integration testing of the live-Elasticsearch adapter. Skipped automatically
+             when Docker is unavailable (disabledWithoutDocker). -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
