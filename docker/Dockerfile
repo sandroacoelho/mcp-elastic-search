@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -q -DskipTests clean package \
 # ---- runtime stage -----------------------------------------------------------
 # Temurin JRE 25 on Alpine, pinned by digest. Tag at pin time: eclipse-temurin:25-jre-alpine.
 # Alpine's BusyBox provides `wget` for the HEALTHCHECK without adding packages.
-FROM eclipse-temurin@sha256:c707c0d18cb9e8556380719f80d96a7529d0746fbb42143893949b98ed2f8943
+FROM eclipse-temurin@sha256:c2b7ea21649875fb9052237ac4e3cd4ef63968a2a389a0a1b1a72a5e53e5c93f
 
 LABEL org.opencontainers.image.title="mcp-elastic-search" \
       org.opencontainers.image.description="Read-only Elasticsearch MCP server (Java 25 + Spring AI, HTTP/SSE)" \
