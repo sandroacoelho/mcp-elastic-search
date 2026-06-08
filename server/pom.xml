@@ -23,7 +23,7 @@
              (see ADR-0001 §4). -->
         <spring-ai.version>1.1.7</spring-ai.version>
         <archunit.version>1.4.2</archunit.version>
-        <jacoco.version>0.8.14</jacoco.version>
+        <jacoco.version>0.8.15</jacoco.version>
         <tomcat.version>11.0.22</tomcat.version>
         <elasticsearch-rest-client.version>8.18.1</elasticsearch-rest-client.version>
         <testcontainers.version>1.21.3</testcontainers.version>
