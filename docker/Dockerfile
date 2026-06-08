@@ -17,7 +17,7 @@
 
 # ---- build stage -------------------------------------------------------------
 # Maven + Temurin JDK 25, pinned by digest. Tag at pin time: maven:3.9-eclipse-temurin-25-alpine.
-FROM maven@sha256:5e8229c2aed320c85d2b3851585dd2e7f7c481e366ce051238e802fd4cfb74aa AS build
+FROM maven@sha256:6ce830fe4c216ab9baaf63d3899d8d178432658bdeb9092cca2bf573475b6b6e AS build
 WORKDIR /src
 
 # Resolve dependencies first so this layer caches unless the POM changes.
